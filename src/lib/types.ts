@@ -138,6 +138,13 @@ export interface AiConversation {
   updated_at: string;
 }
 
+export interface ChatAttachment {
+  name: string;
+  type: string;
+  size: number;
+  data: string;
+}
+
 export interface AiMessage {
   id: string;
   conversation_id: string;
@@ -145,6 +152,7 @@ export interface AiMessage {
   role: 'user' | 'assistant';
   content: string;
   sources: { document_name: string; document_id: string }[] | null;
+  attachments: ChatAttachment[] | null;
   created_at: string;
 }
 

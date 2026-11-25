@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import {
   ChecklistSuggestion, ExtractedJson, LifeInsight, DocumentRecord, Reminder,
-  Task, TaskDependency, SuggestedAction, DeadlineBriefingItem,
+  Task, TaskDependency, SuggestedAction, DeadlineBriefingItem, ChatAttachment,
 } from './types';
 
 const FUNCTION_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
@@ -70,8 +70,9 @@ export interface AskResponse {
 export async function askDocuments(
   question: string,
   conversationId: string | null,
+  attachments?: ChatAttachment[],
 ): Promise<AskResponse> {
-  return callFunction<AskResponse>('ai-ask', { question, conversationId });
+  return callFunction<AskResponse>('ai-ask', { question, conversationId, attachments });
 }
 
 export interface ChecklistResponse {

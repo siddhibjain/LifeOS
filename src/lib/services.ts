@@ -3,6 +3,7 @@ import {
   Profile, DocumentRecord, ExtractedDocumentData, Reminder, Checklist, ChecklistItem,
   VaultEntry, AiConversation, AiMessage, Category, ReminderType, Priority, ExtractedJson,
   ChecklistSuggestion, Task, TaskDependency, FollowUp, TaskStatus, SuggestedAction,
+  ChatAttachment,
 } from './types';
 
 /* ---------------- Profile ---------------- */
@@ -328,6 +329,7 @@ export async function addMessage(payload: {
   role: 'user' | 'assistant';
   content: string;
   sources?: AiMessage['sources'];
+  attachments?: ChatAttachment[];
 }): Promise<AiMessage> {
   const { data, error } = await supabase.from('ai_messages').insert(payload).select().single();
   if (error) throw error;

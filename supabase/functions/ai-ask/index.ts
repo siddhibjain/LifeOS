@@ -6,10 +6,30 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface Attachment {
+  name: string;
+  type: string;
+  size: number;
+  data: string;
+}
+
 interface AskBody {
   question: string;
   conversationId: string | null;
+  attachments?: Attachment[];
 }
+
+const ALLOWED_ATTACHMENT_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/jpg",
+  "image/webp",
+  "image/gif",
+  "application/pdf",
+];
+
+const MAX_ATTACHMENT_SIZE = 15 * 1024 * 1024; // 15MB per attachment
+const MAX_ATTACHMENTS = 5;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -17,11 +37,35 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { question, conversationId } = await req.json() as AskBody;
-    if (!question || !question.trim()) {
-      return new Response(JSON.stringify({ error: "Question is required" }), {
+    const { question, conversationId, attachments } = await req.json() as AskBody;
+
+    // When attachments are present, allow empty question (user may just upload an image to ask about it)
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+    if (!question?.trim() && !hasAttachments) {
+      return new Response(JSON.stringify({ error: "Question or attachment is required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Validate attachments
+    if (hasAttachments) {
+      if (attachments!.length > MAX_ATTACHMENTS) {
+        return new Response(JSON.stringify({
+          error: `You can attach at most ${MAX_ATTACHMENTS} files at once.`,
+        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      for (const att of attachments!) {
+        if (!ALLOWED_ATTACHMENT_TYPES.includes(att.type)) {
+          return new Response(JSON.stringify({
+            error: `File type "${att.type}" is not supported. Allowed: PDF, JPG, PNG, WebP, GIF.`,
+          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        if (att.size > MAX_ATTACHMENT_SIZE) {
+          return new Response(JSON.stringify({
+            error: `File "${att.name}" exceeds the 15MB attachment limit.`,
+          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      }
     }
 
     const apiKey = Deno.env.get("GEMINI_API_KEY");
@@ -105,10 +149,10 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const systemPrompt = `You are LifeOS's document assistant. Answer the user's question using ONLY the document context provided below.
+    const systemPrompt = `You are LifeOS's document assistant. Answer the user's question using ONLY the document context provided below${hasAttachments ? " and any images/files attached to this message" : ""}.
 
 Rules:
-- Ground every answer in the provided documents. Do not invent information.
+- Ground every answer in the provided documents${hasAttachments ? " and attachments" : ""}. Do not invent information.
 - If the answer cannot be found in the context, say so clearly.
 - When you reference a document, mention its name.
 - Be concise and helpful.
@@ -117,10 +161,21 @@ Rules:
 User's documents:
 ${context}`;
 
+    // Build the content parts for the final user turn
+    const finalUserParts: any[] = [{ text: question?.trim() || "Please analyze the attached file(s)." }];
+
+    if (hasAttachments) {
+      for (const att of attachments!) {
+        finalUserParts.push({
+          inlineData: { mimeType: att.type, data: att.data },
+        });
+      }
+    }
+
     const contents = [
       { role: "user", parts: [{ text: systemPrompt }] },
       ...history.map(h => ({ role: h.role === "assistant" ? "model" : "user", parts: [{ text: h.content }] })),
-      { role: "user", parts: [{ text: question }] },
+      { role: "user", parts: finalUserParts },
     ];
 
     const geminiRes = await fetch(

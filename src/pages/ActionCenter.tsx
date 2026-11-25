@@ -1,15 +1,16 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Plus, CheckCircle2, Circle, Clock, Mail, Trash2, Pencil, FileText,
-  AlertTriangle, ChevronLeft, ListTodo, ArrowRight,
+  AlertTriangle, ChevronLeft, ListTodo, ArrowRight, CalendarClock, Sparkles, X,
 } from 'lucide-react';
 import { useToast } from '@/lib/toast';
 import {
-  listTasks, createTask, updateTask, deleteTask, listDocuments,
+  listTasks, createTask, updateTask, deleteTask, listDocuments, applySchedule,
 } from '@/lib/services';
+import { autoScheduleTasks } from '@/lib/ai';
 import {
   Task, TaskStatus, TASK_STATUSES, TASK_STATUS_META, Priority, PRIORITIES,
-  DocumentRecord, AppRoute,
+  DocumentRecord, AppRoute, ScheduledSlot,
 } from '@/lib/types';
 import { PRIORITY_META } from '@/lib/categories';
 import { cn, formatDate, daysUntil } from '@/lib/utils';
@@ -34,6 +35,8 @@ export function ActionCenter({ onNavigate }: { onNavigate?: (r: AppRoute) => voi
   const [editTarget, setEditTarget] = useState<Task | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [schedulePreview, setSchedulePreview] = useState<{ slots: ScheduledSlot[]; cleared: string[] } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,6 +90,35 @@ export function ActionCenter({ onNavigate }: { onNavigate?: (r: AppRoute) => voi
     }
   }
 
+  async function handleAutoAllot() {
+    const schedulable = tasks.filter(t => t.status !== 'completed');
+    if (schedulable.length === 0) {
+      toast('No incomplete tasks to schedule.', 'info');
+      return;
+    }
+    setScheduling(true);
+    try {
+      const result = await autoScheduleTasks();
+      setSchedulePreview({ slots: result.schedule, cleared: result.cleared });
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Auto-allot failed.', 'error');
+    } finally {
+      setScheduling(false);
+    }
+  }
+
+  async function handleApplySchedule() {
+    if (!schedulePreview) return;
+    try {
+      await applySchedule(schedulePreview.slots, schedulePreview.cleared);
+      await load();
+      toast(`Auto-allotted ${schedulePreview.slots.length} task${schedulePreview.slots.length === 1 ? '' : 's'}.`, 'success');
+      setSchedulePreview(null);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not save schedule.', 'error');
+    }
+  }
+
   const counts = TASK_STATUSES.reduce<Record<string, number>>((acc, s) => {
     acc[s] = tasks.filter(t => t.status === s).length;
     return acc;
@@ -105,14 +137,25 @@ export function ActionCenter({ onNavigate }: { onNavigate?: (r: AppRoute) => voi
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto pb-24 lg:pb-6">
-      <div className="flex items-center justify-between mb-6 animate-fade-in">
-        <div>
+      <div className="flex items-center justify-between mb-6 animate-fade-in gap-3">
+        <div className="min-w-0">
           <h2 className="font-serif text-2xl sm:text-3xl text-espresso">Action Center</h2>
           <p className="text-taupe text-sm mt-1">Manage tasks created from documents and manually.</p>
         </div>
-        <button className="btn-gold" onClick={() => setShowCreate(true)}>
-          <Plus size={16} /> <span className="hidden sm:inline">New task</span>
-        </button>
+        <div className="flex gap-2 shrink-0">
+          <button
+            className="btn-outline inline-flex items-center gap-2"
+            onClick={handleAutoAllot}
+            disabled={scheduling || tasks.filter(t => t.status !== 'completed').length === 0}
+            title="Let AI assign time slots to all incomplete tasks"
+          >
+            {scheduling ? <Sparkles size={16} className="animate-pulse" /> : <CalendarClock size={16} />}
+            <span className="hidden sm:inline">{scheduling ? 'Scheduling…' : 'Auto-Allot Tasks'}</span>
+          </button>
+          <button className="btn-gold" onClick={() => setShowCreate(true)}>
+            <Plus size={16} /> <span className="hidden sm:inline">New task</span>
+          </button>
+        </div>
       </div>
 
       {/* Status filter tabs */}
@@ -197,6 +240,14 @@ export function ActionCenter({ onNavigate }: { onNavigate?: (r: AppRoute) => voi
         onConfirm={handleDelete}
         onClose={() => setDeleteTarget(null)}
       />
+
+      <SchedulePreviewModal
+        open={!!schedulePreview}
+        slots={schedulePreview?.slots || []}
+        tasks={tasks}
+        onClose={() => setSchedulePreview(null)}
+        onApply={handleApplySchedule}
+      />
     </div>
   );
 }
@@ -266,6 +317,11 @@ function TaskRow({ task, docName, onStatusChange, onEdit, onDelete }: {
                 {days !== null && days < 0 ? `Overdue ${formatDate(task.deadline)}`
                   : days !== null && days <= 7 ? `Due in ${days}d`
                   : `Due ${formatDate(task.deadline)}`}
+              </span>
+            )}
+            {task.scheduled_start && (
+              <span className="chip bg-sage/12 text-sage text-[10px] inline-flex items-center gap-1">
+                <CalendarClock size={10} /> {formatScheduleTime(task.scheduled_start, task.estimated_duration_minutes)}
               </span>
             )}
             {docName && (
@@ -395,6 +451,100 @@ export function TaskFormModal({ open, onClose, onSubmit, task, docs }: {
           </div>
         )}
       </div>
+    </Modal>
+  );
+}
+
+function formatScheduleTime(start: string, durationMin: number | null): string {
+  const s = new Date(start);
+  const dayLabel = s.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const timeLabel = s.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  if (durationMin) {
+    const e = new Date(s.getTime() + durationMin * 60000);
+    const endLabel = e.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    return `${dayLabel} · ${timeLabel}–${endLabel}`;
+  }
+  return `${dayLabel} · ${timeLabel}`;
+}
+
+function SchedulePreviewModal({ open, slots, tasks, onClose, onApply }: {
+  open: boolean;
+  slots: ScheduledSlot[];
+  tasks: Task[];
+  onClose: () => void;
+  onApply: () => void;
+}) {
+  const taskById = new Map(tasks.map(t => [t.id, t]));
+  const sorted = [...slots].sort((a, b) => new Date(a.scheduled_start).getTime() - new Date(b.scheduled_start).getTime());
+
+  // Group by day
+  const byDay = new Map<string, ScheduledSlot[]>();
+  for (const s of sorted) {
+    const d = new Date(s.scheduled_start);
+    const key = d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    const arr = byDay.get(key) || [];
+    arr.push(s);
+    byDay.set(key, arr);
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Proposed schedule"
+      size="lg"
+      footer={
+        <>
+          <button className="btn-ghost" onClick={onClose}>Discard</button>
+          <button className="btn-primary inline-flex items-center gap-2" onClick={onApply}>
+            <CheckCircle2 size={16} /> Apply schedule
+          </button>
+        </>
+      }
+    >
+      {sorted.length === 0 ? (
+        <EmptyState
+          icon={<CalendarClock size={28} />}
+          title="No schedule generated"
+          description="There are no incomplete tasks to auto-allot right now."
+        />
+      ) : (
+        <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1">
+          {Array.from(byDay.entries()).map(([day, daySlots]) => (
+            <div key={day}>
+              <p className="text-xs font-semibold text-espresso uppercase tracking-wide mb-2 sticky top-0 bg-white/90 backdrop-blur-sm py-1">
+                {day}
+              </p>
+              <div className="space-y-2">
+                {daySlots.map(slot => {
+                  const t = taskById.get(slot.task_id);
+                  if (!t) return null;
+                  const prio = PRIORITY_META[t.priority];
+                  return (
+                    <div key={slot.task_id} className="flex items-center gap-3 p-3 rounded-xl bg-ivory-2/40 border border-ivory-2">
+                      <div className="flex flex-col items-center justify-center w-16 shrink-0">
+                        <span className="text-sm font-semibold text-espresso">
+                          {new Date(slot.scheduled_start).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                        </span>
+                        <span className="text-[10px] text-taupe">{slot.estimated_duration_minutes}m</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-espresso truncate">{t.title}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className={cn('chip text-[10px]', prio.bg, prio.text)}>{prio.label}</span>
+                          {t.deadline && (
+                            <span className="chip bg-ivory-2 text-taupe text-[10px]">Due {formatDate(t.deadline)}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </Modal>
   );
 }

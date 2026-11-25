@@ -3,7 +3,7 @@ import {
   Profile, DocumentRecord, ExtractedDocumentData, Reminder, Checklist, ChecklistItem,
   VaultEntry, AiConversation, AiMessage, Category, ReminderType, Priority, ExtractedJson,
   ChecklistSuggestion, Task, TaskDependency, FollowUp, TaskStatus, SuggestedAction,
-  ChatAttachment,
+  ChatAttachment, ScheduledSlot,
 } from './types';
 
 /* ---------------- Profile ---------------- */
@@ -432,6 +432,35 @@ export async function addDependency(taskId: string, prerequisiteId: string): Pro
 export async function removeDependency(id: string): Promise<void> {
   const { error } = await supabase.from('task_dependencies').delete().eq('id', id);
   if (error) throw error;
+}
+
+export async function applySchedule(schedule: ScheduledSlot[], clearedIds: string[]): Promise<void> {
+  // Apply scheduled slots
+  for (const slot of schedule) {
+    const { error } = await supabase
+      .from('tasks')
+      .update({
+        estimated_duration_minutes: slot.estimated_duration_minutes,
+        scheduled_start: slot.scheduled_start,
+        scheduled_end: slot.scheduled_end,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', slot.task_id);
+    if (error) throw error;
+  }
+  // Clear slots on completed/cleared tasks
+  if (clearedIds.length > 0) {
+    const { error } = await supabase
+      .from('tasks')
+      .update({
+        estimated_duration_minutes: null,
+        scheduled_start: null,
+        scheduled_end: null,
+        updated_at: new Date().toISOString(),
+      })
+      .in('id', clearedIds);
+    if (error) throw error;
+  }
 }
 
 /* ---------------- Follow-ups ---------------- */

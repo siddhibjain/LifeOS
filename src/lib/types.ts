@@ -200,9 +200,19 @@ export interface Task {
   reminder_enabled: boolean;
   ai_suggested: boolean;
   approved: boolean;
+  estimated_duration_minutes: number | null;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
   created_at: string;
   updated_at: string;
   documents?: Pick<DocumentRecord, 'document_name'> | null;
+}
+
+export interface ScheduledSlot {
+  task_id: string;
+  estimated_duration_minutes: number;
+  scheduled_start: string;
+  scheduled_end: string;
 }
 
 export interface TaskDependency {

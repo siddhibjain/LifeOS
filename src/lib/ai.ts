@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import {
   ChecklistSuggestion, ExtractedJson, LifeInsight, DocumentRecord, Reminder,
   Task, TaskDependency, SuggestedAction, DeadlineBriefingItem, ChatAttachment,
+  ScheduledSlot,
 } from './types';
 
 const FUNCTION_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
@@ -91,6 +92,20 @@ export interface InsightsResponse {
 
 export async function generateLifeInsights(): Promise<InsightsResponse> {
   return callFunction<InsightsResponse>('ai-insights', {});
+}
+
+export interface ScheduleResponse {
+  schedule: ScheduledSlot[];
+  cleared: string[];
+  available: boolean;
+  message?: string;
+}
+
+export async function autoScheduleTasks(opts?: {
+  work_start_hour?: number;
+  work_end_hour?: number;
+}): Promise<ScheduleResponse> {
+  return callFunction<ScheduleResponse>('ai-schedule', opts || {});
 }
 
 // Local fallback insight generator — uses real user data, no AI.

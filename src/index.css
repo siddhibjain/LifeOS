@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-ivory text-espresso font-sans;
+    margin: 0;
+    line-height: 1.6;
+  }
+  h1, h2, h3, h4 {
+    @apply font-serif;
+    line-height: 1.2;
+  }
+  ::selection {
+    @apply bg-champagne/30;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-champagne/40;
+  }
+  .btn-primary {
+    @apply btn bg-espresso text-ivory px-5 py-2.5 text-sm hover:bg-espresso/90 shadow-soft hover:shadow-lift active:scale-[0.98];
+  }
+  .btn-gold {
+    @apply btn bg-champagne text-espresso px-5 py-2.5 text-sm hover:bg-champagne-dark hover:text-ivory shadow-soft hover:shadow-lift active:scale-[0.98];
+  }
+  .btn-outline {
+    @apply btn border border-espresso/15 text-espresso px-5 py-2.5 text-sm hover:border-champagne hover:bg-ivory-2 active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply btn text-espresso/70 px-4 py-2 text-sm hover:text-espresso hover:bg-ivory-2;
+  }
+  .card {
+    @apply bg-card rounded-xl2 border border-espresso/5 shadow-card;
+  }
+  .input {
+    @apply w-full rounded-xl border border-espresso/10 bg-ivory/40 px-4 py-2.5 text-sm text-espresso placeholder:text-taupe/70 transition-colors focus:outline-none focus:border-champagne focus:bg-card;
+  }
+  .label {
+    @apply block text-xs font-medium uppercase tracking-wide text-taupe mb-1.5;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium;
+  }
+}
+
+@layer utilities {
+  .skeleton {
+    @apply relative overflow-hidden bg-ivory-2 rounded-md;
+  }
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scroll-thin::-webkit-scrollbar-thumb { @apply bg-taupe/30 rounded-full; }
+}

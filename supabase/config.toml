@@ -1,0 +1,8 @@
+[functions.ai-extract]
+verify_jwt = true
+[functions.ai-ask]
+verify_jwt = true
+[functions.ai-checklist]
+verify_jwt = true
+[functions.ai-insights]
+verify_jwt = true

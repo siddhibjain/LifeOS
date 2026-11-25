@@ -1,0 +1,21 @@
+{
+  "projectId": "73214835",
+  "functions": {
+    "ai-ask": {
+      "hasChanged": false,
+      "hash": "490f1b510e346b96fa54fa3b007cc416bbf55de7995aa4029f114ee4a6bc7819"
+    },
+    "ai-checklist": {
+      "hasChanged": false,
+      "hash": "4fe0e0a2e171928b0de31a274e59ff4365d433ba4e575bbf653265c32c808a9e"
+    },
+    "ai-extract": {
+      "hasChanged": false,
+      "hash": "c2c59e9812e181cd4cd2d1a15b4d33ae4706e3d547cc75ae2c6a8d888addc6f2"
+    },
+    "ai-insights": {
+      "hasChanged": false,
+      "hash": "f0540f2f3e3685fcad9aa3de32394d33e5b33afa7e51914b2f87ec1848b51256"
+    }
+  }
+}

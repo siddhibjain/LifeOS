@@ -33,6 +33,7 @@ const MAX_DAILY_MINUTES = 6 * 60;
 const WORK_START_HOUR = 9;
 const WORK_END_HOUR = 18;
 const SLOT_STEP_MINUTES = 15;
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -40,7 +41,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const apiKey = Deno.env.get("GEMINI_API_KEY");
+    const apiKey = Deno.env.get("OPENAI_AI_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
@@ -68,7 +69,6 @@ Deno.serve(async (req: Request) => {
       .select("task_id, prerequisite_task_id")
       .eq("user_id", user.id);
 
-    // Only schedule incomplete tasks; completed ones keep any prior slot cleared.
     const incomplete = (tasks || []).filter((t: TaskRow) => t.status !== "completed");
     const depsList = (deps || []) as DepRow[];
 
@@ -81,7 +81,6 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Step 1: estimate durations. Use Gemini if available, else heuristic.
     let durations = new Map<string, number>();
     if (apiKey) {
       try {
@@ -93,10 +92,7 @@ Deno.serve(async (req: Request) => {
       durations = heuristicDurations(incomplete);
     }
 
-    // Step 2: deterministic scheduling algorithm.
     const schedule = buildSchedule(incomplete, depsList, durations, workStart, workEnd);
-
-    // Completed tasks get their slots cleared.
     const cleared = (tasks || []).filter((t: TaskRow) => t.status === "completed").map((t: TaskRow) => t.id);
 
     return new Response(JSON.stringify({
@@ -126,21 +122,23 @@ async function estimateDurations(tasks: TaskRow[], apiKey: string): Promise<Map<
 Tasks:
 ${JSON.stringify(compact, null, 2)}`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
-      }),
+  const res = await fetch(OPENAI_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
     },
-  );
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+    }),
+  });
 
-  if (!res.ok) throw new Error(`Gemini ${res.status}`);
+  if (!res.ok) throw new Error(`OpenAI ${res.status}`);
   const json = await res.json();
-  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  const text = json?.choices?.[0]?.message?.content || "";
   let parsed: { estimates?: { idx: number; minutes: number }[] } | null = null;
   try { parsed = JSON.parse(text); } catch { /* */ }
 
@@ -182,7 +180,6 @@ function buildSchedule(
     prereqs.set(d.task_id, arr);
   }
 
-  // Priority + deadline urgency sort key (lower = earlier).
   const sortKey = (t: TaskRow): number => {
     const pw = PRIORITY_WEIGHT[t.priority] ?? 2;
     let deadlineScore = 100;
@@ -192,19 +189,16 @@ function buildSchedule(
       const daysLeft = (dl - now) / 86400000;
       deadlineScore = daysLeft < 0 ? 0 : daysLeft <= 3 ? 10 : daysLeft <= 7 ? 25 : daysLeft <= 14 ? 50 : 80;
     }
-    // higher priority weight and lower deadline score => schedule first
     return (4 - pw) * 100 + deadlineScore;
   };
 
-  // Topological order respecting dependencies, tie-broken by sortKey.
   const scheduled = new Set<string>();
   const result: Slot[] = [];
-  const slotEnds: number[] = []; // busy intervals as ms timestamps
+  const slotEnds: number[] = [];
 
   const now = new Date();
   const startDate = new Date(now);
   startDate.setHours(0, 0, 0, 0);
-  // Don't schedule before the current time today.
   const earliestGlobal = now.getTime() > startDate.getTime() + workStart * 3600000
     ? now.getTime()
     : startDate.getTime() + workStart * 3600000;
@@ -213,13 +207,11 @@ function buildSchedule(
   let guard = 0;
   while (remaining.length > 0 && guard < tasks.length * 5 + 50) {
     guard++;
-    // Find tasks whose prerequisites are all scheduled (or not in our set).
     const ready = remaining.filter((t) => {
       const pres = prereqs.get(t.id) || [];
       return pres.every((p) => scheduled.has(p) || !taskMap.has(p));
     });
     if (ready.length === 0) {
-      // Circular or unsatisfiable deps — fall back to scheduling the rest by key.
       remaining.sort((a, b) => sortKey(a) - sortKey(b));
       remaining.forEach((t) => scheduled.add(t.id));
       continue;
@@ -273,7 +265,6 @@ function findFreeSlot(
     let probe = Math.max(cursor, dayStart);
     while (probe + durMs <= dayEnd && probe + durMs <= latestAcceptable) {
       if (!overlaps(probe, probe + durMs, busy)) {
-        // Enforce daily workload cap.
         const dayMinutes = computeDayLoad(probe, busy, workStart, workEnd);
         if (dayMinutes + durationMin <= MAX_DAILY_MINUTES) {
           return probe;
@@ -281,12 +272,10 @@ function findFreeSlot(
       }
       probe += SLOT_STEP_MINUTES * 60000;
     }
-    // Move to next day.
     cursor = new Date(cursor);
     cursor.setDate(cursor.getDate() + 1);
     cursor.setHours(workStart, 0, 0, 0);
   }
-  // Fallback: just return earliest even if overlapping (shouldn't happen normally).
   return floorToSlot(earliest);
 }
 

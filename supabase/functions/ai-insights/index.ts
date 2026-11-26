@@ -6,13 +6,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
-    const apiKey = Deno.env.get("GEMINI_API_KEY");
+    const apiKey = Deno.env.get("OPENAI_AI_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
@@ -26,7 +28,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Gather real user data
     const { data: docs } = await supabase
       .from("documents")
       .select("id, document_name, category, expiry_date, extraction_status, review_status")
@@ -63,11 +64,10 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({
         insights: [],
         available: false,
-        error: "Gemini API key is not configured.",
+        error: "OpenAI API key is not configured.",
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Build a compact data summary for the model
     const today = new Date().toISOString().slice(0, 10);
     const extractedMap = new Map((extracted || []).map((e: any) => [e.document_id, e.extracted_json]));
     const docsSummary = (docs || []).map((d: any) => {
@@ -108,28 +108,30 @@ Return JSON: { "insights": [ { "severity": "alert"|"warning"|"info", "title": st
 User data:
 ${dataContext}`;
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
-        }),
+    const openaiRes = await fetch(OPENAI_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
       },
-    );
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+      }),
+    });
 
-    if (!geminiRes.ok) {
+    if (!openaiRes.ok) {
       return new Response(JSON.stringify({
         insights: [],
         available: true,
-        error: `Gemini request failed (${geminiRes.status}).`,
+        error: `OpenAI request failed (${openaiRes.status}).`,
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const geminiJson = await geminiRes.json();
-    const text = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const openaiJson = await openaiRes.json();
+    const text = openaiJson?.choices?.[0]?.message?.content || "";
     let parsed: { insights?: any[] } | null = null;
     try { parsed = JSON.parse(text); } catch { /* */ }
 

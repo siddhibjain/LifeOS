@@ -16,7 +16,7 @@ interface ExtractRequestBody {
 const VALID_CATEGORIES = ["Identity","Education","Finance","Insurance","Medical","Travel","Property","Other"] as const;
 
 const EXTRACTION_PROMPT = `You are a document intelligence assistant for LifeOS, a personal life administration app.
-You receive a document (PDF or image). Extract structured information from it.
+You receive a document (image). Extract structured information from it.
 
 Rules:
 - Extract ONLY information clearly present in the document.
@@ -52,6 +52,8 @@ Return JSON in EXACTLY this shape:
   ]
 }`;
 
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -65,16 +67,15 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const apiKey = Deno.env.get("GEMINI_API_KEY");
+    const apiKey = Deno.env.get("OPENAI_AI_KEY");
     if (!apiKey) {
       return new Response(JSON.stringify({
         available: false,
-        error: "Gemini API key is not configured. Add GEMINI_API_KEY as an edge function secret.",
+        error: "OpenAI API key is not configured. Add OPENAI_AI_KEY as an edge function secret.",
         extracted: null, extracted_text: null, model: null, confidence: null, category: "Other",
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Auth check
     const authHeader = req.headers.get("Authorization") || "";
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -87,10 +88,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Ownership check: the documents row must exist, belong to this user,
-    // and its stored file_path must match the path supplied by the client.
-    // This prevents an authenticated user from extracting another user's file
-    // by guessing a path, since the service role key bypasses Storage RLS.
     const { data: docRow, error: docErr } = await supabase
       .from("documents")
       .select("id, user_id, file_path")
@@ -116,7 +113,6 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Download the file from Supabase Storage using the service role key
     const { data: fileData, error: downloadError } = await supabase.storage
       .from("lifeos-documents")
       .download(filePath);
@@ -129,7 +125,6 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Convert blob to base64 for Gemini inlineData
     const arrayBuffer = await fileData.arrayBuffer();
     const uint8 = new Uint8Array(arrayBuffer);
     let binary = "";
@@ -147,40 +142,61 @@ Deno.serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Call Gemini with inline file
-    const inlineData = {
-      inlineData: { mimeType, data: fileBase64 },
-    };
+    const isImage = mimeType.startsWith("image/");
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: EXTRACTION_PROMPT }, inlineData] }],
-          generationConfig: { responseMimeType: "application/json", temperature: 0.1 },
-        }),
+    if (!isImage) {
+      // OpenAI vision doesn't support PDFs directly — return a message so the user can fill manually
+      return new Response(JSON.stringify({
+        available: true,
+        extracted: null,
+        extracted_text: null,
+        model: "gpt-4o",
+        confidence: null,
+        category: "Other",
+        note: "AI extraction is available for image files (JPG, PNG). For PDFs, please fill in the details manually below.",
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const openaiRes = await fetch(OPENAI_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
       },
-    );
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: EXTRACTION_PROMPT },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: `Extract structured information from this document: ${fileName}` },
+              { type: "image_url", image_url: { url: `data:${mimeType};base64,${fileBase64}` } },
+            ],
+          },
+        ],
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+      }),
+    });
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      let geminiMsg = `Gemini request failed (${geminiRes.status})`;
+    if (!openaiRes.ok) {
+      const errText = await openaiRes.text();
+      let errMsg = `OpenAI request failed (${openaiRes.status})`;
       try {
         const eJson = JSON.parse(errText);
-        if (eJson?.error?.message) geminiMsg = `Gemini error: ${eJson.error.message}`;
+        if (eJson?.error?.message) errMsg = `OpenAI error: ${eJson.error.message}`;
       } catch { /* keep default */ }
       return new Response(JSON.stringify({
         available: false,
-        error: geminiMsg,
+        error: errMsg,
         extracted: null, extracted_text: null, model: null, confidence: null, category: "Other",
         _detail: errText.slice(0, 500),
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const geminiJson = await geminiRes.json();
-    const text = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const openaiJson = await openaiRes.json();
+    const text = openaiJson?.choices?.[0]?.message?.content || "";
     let parsed: Record<string, unknown> | null = null;
     try { parsed = JSON.parse(text); } catch { /* malformed */ }
 
@@ -189,7 +205,7 @@ Deno.serve(async (req: Request) => {
         available: true,
         extracted: null,
         extracted_text: text || null,
-        model: "gemini-2.5-flash",
+        model: "gpt-4o",
         confidence: null,
         category: "Other",
         note: "AI could not produce structured output for this document.",
@@ -213,7 +229,7 @@ Deno.serve(async (req: Request) => {
       available: true,
       extracted: parsed,
       extracted_text: text,
-      model: "gemini-2.5-flash",
+      model: "gpt-4o",
       confidence: parsed.uncertain ? 0.5 : 0.85,
       category,
       suggested_actions: suggestedActions,

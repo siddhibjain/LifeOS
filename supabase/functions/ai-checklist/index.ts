@@ -29,6 +29,8 @@ Return JSON in EXACTLY this shape:
   ]
 }`;
 
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -42,7 +44,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const apiKey = Deno.env.get("GEMINI_API_KEY");
+    const apiKey = Deno.env.get("OPENAI_AI_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
@@ -59,35 +61,40 @@ Deno.serve(async (req: Request) => {
     if (!apiKey) {
       return new Response(JSON.stringify({
         available: false,
-        error: "Gemini API key is not configured.",
+        error: "OpenAI API key is not configured.",
         suggestion: null,
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `${CHECKLIST_PROMPT}\n\nSituation: ${situation}` }] }],
-          generationConfig: { responseMimeType: "application/json", temperature: 0.3 },
-        }),
+    const openaiRes = await fetch(OPENAI_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
       },
-    );
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: CHECKLIST_PROMPT },
+          { role: "user", content: `Situation: ${situation}` },
+        ],
+        temperature: 0.3,
+        response_format: { type: "json_object" },
+      }),
+    });
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
+    if (!openaiRes.ok) {
+      const errText = await openaiRes.text();
       return new Response(JSON.stringify({
         available: true,
-        error: `Gemini request failed (${geminiRes.status}).`,
+        error: `OpenAI request failed (${openaiRes.status}).`,
         suggestion: null,
         _detail: errText.slice(0, 400),
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const geminiJson = await geminiRes.json();
-    const text = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const openaiJson = await openaiRes.json();
+    const text = openaiJson?.choices?.[0]?.message?.content || "";
     let parsed: { title?: string; description?: string; items?: any[] } | null = null;
     try { parsed = JSON.parse(text); } catch { /* */ }
 

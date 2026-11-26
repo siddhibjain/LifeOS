@@ -3,23 +3,23 @@
   "functions": {
     "ai-ask": {
       "hasChanged": false,
-      "hash": "c5458f1bd9a40dceb026d00dda542234e96030b51f5977f549ad085563b14570"
+      "hash": "654bd90172b4384ffca64d480e7dfb860a02bf7baa44041fa6ca474e2741481f"
     },
     "ai-checklist": {
       "hasChanged": false,
-      "hash": "808c08c20646b8be94cea43314f4133f76c3ec333a2c911953e1d092f9f0f4b8"
+      "hash": "e6c274ef9e031bbe45777a1698e05ca4c5bac565736310293bc473be527a66cf"
     },
     "ai-extract": {
       "hasChanged": false,
-      "hash": "a89c4cc06bfac05edbdd3132f383c9acce6e7ceb49e7a265f34c7c600d2f845d"
+      "hash": "3b3d4b35c93475b5eca1591464ec3d5db30b86ef3466e2d00f0e6fc287389028"
     },
     "ai-insights": {
       "hasChanged": false,
-      "hash": "850bbb71b68058ba644e896240f42c89bc8d860a24d15f1db0235cbf40be66b3"
+      "hash": "0cde8a7f25183682693438af76f5b5e884df3ccd921d4c9cfc447e1c2c9b2c6a"
     },
     "ai-schedule": {
       "hasChanged": false,
-      "hash": "b53d10a66469a6b845b6ab3c3cca611d79e6685631d0d5cb541b7204c47934df"
+      "hash": "21ab823a22fbd38bad345ae2f1b41304efc8c669612da972f1f57b12bdd09280"
     }
   }
 }

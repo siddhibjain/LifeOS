@@ -213,7 +213,7 @@ Deno.serve(async (req: Request) => {
       available: true,
       extracted: parsed,
       extracted_text: text,
-      model: "gemini-3.8-flash",
+      model: "gemini-2.0-flash",
       confidence: parsed.uncertain ? 0.5 : 0.85,
       category,
       suggested_actions: suggestedActions,

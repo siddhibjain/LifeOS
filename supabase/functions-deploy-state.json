@@ -3,19 +3,19 @@
   "functions": {
     "ai-ask": {
       "hasChanged": false,
-      "hash": "6db64f51e429e4da610de1decd92c3a9ec0c83fd79a6de788de08dbf0b60f6a1"
+      "hash": "7a8b9f85465d8b2b05948c62a155abb1da3bde51c46b265a6ccc6edcb2145976"
     },
     "ai-checklist": {
       "hasChanged": false,
-      "hash": "b8662208049778eec0db6b476a2741eaddad99e4d787445e73977fd304e31cea"
+      "hash": "4fe0e0a2e171928b0de31a274e59ff4365d433ba4e575bbf653265c32c808a9e"
     },
     "ai-extract": {
       "hasChanged": false,
-      "hash": "3f9cd9fe59e914966420d396be994aa3d15f947aef9b868b70ae966973499ec2"
+      "hash": "c2c59e9812e181cd4cd2d1a15b4d33ae4706e3d547cc75ae2c6a8d888addc6f2"
     },
     "ai-insights": {
       "hasChanged": false,
-      "hash": "c2b94dcb784fb44f0a26830de392830b2b3ec84a2b877c52fc8d506c50e86a28"
+      "hash": "f0540f2f3e3685fcad9aa3de32394d33e5b33afa7e51914b2f87ec1848b51256"
     },
     "ai-schedule": {
       "hasChanged": false,

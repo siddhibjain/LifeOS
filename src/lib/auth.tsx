@@ -3,6 +3,9 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { Profile } from './types';
 
+const DEMO_EMAIL = 'guest@lifeos.app';
+const DEMO_PASSWORD = 'LifeOS-guest-2026';
+
 interface AuthContextValue {
   session: Session | null;
   user: User | null;
@@ -43,13 +46,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    (async () => {
+      // Try existing session first
+      const { data: existing } = await supabase.auth.getSession();
+      if (existing.session?.user) {
+        if (!mounted) return;
+        setSession(existing.session);
+        setUser(existing.session.user);
+        setLoading(false);
+        await loadProfile(existing.session.user.id);
+        return;
+      }
+      // No session — auto sign-in with the persistent guest account
+      // so RLS and JWT-based edge functions keep working transparently.
+      await ensureDemoUser();
+      const { data: signed } = await supabase.auth.signInWithPassword({
+        email: DEMO_EMAIL,
+        password: DEMO_PASSWORD,
+      });
       if (!mounted) return;
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
+      if (signed.session?.user) {
+        setSession(signed.session);
+        setUser(signed.session.user);
+        await loadProfile(signed.session.user.id);
+      }
       setLoading(false);
-      if (data.session?.user) loadProfile(data.session.user.id);
-    });
+    })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
       (async () => {
@@ -67,7 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false;
       sub.subscription.unsubscribe();
     };
-  }, [loadProfile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
@@ -81,6 +104,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
+}
+
+async function ensureDemoUser(): Promise<void> {
+  const { error } = await supabase.auth.signUp({
+    email: DEMO_EMAIL,
+    password: DEMO_PASSWORD,
+  });
+  if (error && !error.message.toLowerCase().includes('already')) {
+    console.warn('Guest sign-up notice:', error.message);
+  }
 }
 
 export function useAuth(): AuthContextValue {

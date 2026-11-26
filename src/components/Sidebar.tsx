@@ -1,4 +1,4 @@
-import { LayoutDashboard, FolderOpen, MessageSquareText, Bell, ListChecks, Lock, Settings, LogOut, X, ListTodo, GitBranch, Mail, Calendar } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, MessageSquareText, Bell, ListChecks, Lock, Settings, X, ListTodo, GitBranch, Mail, Calendar } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { useAuth } from '@/lib/auth';
 import { initials } from '@/lib/utils';
@@ -83,9 +83,6 @@ export function Sidebar({ route, onNavigate, onSignOut, open, onClose }: Sidebar
               <p className="text-xs text-taupe truncate">{user?.email}</p>
             </div>
           </div>
-          <button onClick={onSignOut} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-espresso/65 hover:bg-rose/8 hover:text-rose transition-colors mt-1">
-            <LogOut size={18} /> Sign out
-          </button>
         </div>
       </aside>
     </>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  User, Bell, Shield, Download, Trash2, LogOut, Mail, Globe, Phone, Heart,
+  User, Bell, Shield, Download, Trash2, Mail, Globe, Phone, Heart,
   Loader2, AlertTriangle, Check,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
@@ -161,11 +161,6 @@ export function Settings({ onSignedOut }: SettingsProps) {
     }
   }
 
-  async function handleSignOut() {
-    await signOut();
-    onSignedOut();
-  }
-
   return (
     <div className="p-4 sm:p-6 max-w-3xl mx-auto pb-24 lg:pb-6">
       <div className="mb-6">
@@ -319,9 +314,6 @@ export function Settings({ onSignedOut }: SettingsProps) {
             <h3 className="font-serif text-lg text-espresso">Account actions</h3>
           </div>
           <div className="space-y-3">
-            <button className="btn-outline w-full" onClick={handleSignOut}>
-              <LogOut size={15} /> Sign out
-            </button>
             <button className="btn bg-rose/10 text-rose hover:bg-rose/20 w-full" onClick={() => setDeleteConfirm(true)}>
               <Trash2 size={15} /> Delete account and all data
             </button>

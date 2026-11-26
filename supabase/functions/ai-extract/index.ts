@@ -153,7 +153,7 @@ Deno.serve(async (req: Request) => {
     };
 
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -189,7 +189,7 @@ Deno.serve(async (req: Request) => {
         available: true,
         extracted: null,
         extracted_text: text || null,
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         confidence: null,
         category: "Other",
         note: "AI could not produce structured output for this document.",
@@ -213,7 +213,7 @@ Deno.serve(async (req: Request) => {
       available: true,
       extracted: parsed,
       extracted_text: text,
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       confidence: parsed.uncertain ? 0.5 : 0.85,
       category,
       suggested_actions: suggestedActions,

@@ -24,13 +24,14 @@
 ## Decisions, constraints & rationale
 
 - Backend: Supabase (database with RLS on all tables, private storage bucket, deployed edge functions).
-- AI: Google Gemini via edge functions; `GEMINI_API_KEY` Supabase secret required for real AI output.
+- AI: Google Gemini via edge functions; `GEMINI_API_KEY` Supabase secret is configured.
+- Gemini model switched from `gemini-2.0-flash` (deprecated/shut down) to `gemini-2.5-flash` across all 5 edge functions: ai-extract, ai-ask, ai-checklist, ai-insights, ai-schedule.
 - Graceful degradation: AI features show explicit "not configured" state without key; dashboard falls back to rule-based insights computed from document expiry dates and reminders.
 - `ExtractedJson` type includes a `category` field returned by the document-extraction edge function.
 - Global UI constraints (JSX + Tailwind, lucide-react icons, `@/` path alias) are defined in `.bolt/prompt` and not restated here.
 
 ## Open questions & assumptions
 
-- Gemini key provisioning is the only remaining manual setup step; assumed not yet configured in deployed environment.
 - RLS policies and edge function deployment are assumed complete/valid; no schema migrations pending.
 - No automated tests mentioned; build/typecheck used as the verification gate.
+- If AI errors recur, verify Gemini API status and model availability; `gemini-2.5-flash-lite` is a fallback for free-tier stability.
